@@ -37,9 +37,6 @@ def RecognizePlateNumber():
                     'bbox': (x1, y1, x2, y2),
                     'confidence': confidence
                 })
-
-    for obj in detected_objects:
-        print(f"Обнаружен объект: {obj['class']}, Координаты: {obj['bbox']}, Вероятность: {obj['confidence']:.2f}")
     if not any(obj['class'] == 'Car' for obj in detected_objects):
         return jsonify({'status': False, 'message': 'Машина не найдена на фото'}), 401
     if not any(obj['class'] == 'Plate' for obj in detected_objects):
@@ -50,46 +47,64 @@ def RecognizePlateNumber():
         cv2.rectangle(image, (x1, y1), (x2, y2), (0, 255, 0), 2)
         cv2.putText(image, f"{obj['class']} {obj['confidence']:.2f}", (x1, y1 - 10), 
                     cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
-    cv2.imshow('Detected Objects', image)
-    cv2.waitKey(0)
-    cv2.destroyAllWindows()
-
     for obj in detected_objects:
         if obj['class'] == 'Plate':
             x1, y1, x2, y2 = map(int, obj['bbox'])
             plate_image = image[y1:y2, x1:x2]
             table = np.array([(i / 255.0) ** 1.0 * 255 for i in range(256)]).astype("uint8")
             threshold_value = 0
+            allowedSymbols = '0123456789ABВCEHKMМOPTТXY'
+            firstRecognizedIteration = 0
             recognized_text = ""
-            for i in range(45):
-                if i > 0:
-                    gamma_adjusted_image = cv2.LUT(plate_image, table)
-                    gray = cv2.cvtColor(gamma_adjusted_image, cv2.COLOR_BGR2GRAY)
-                    _, thresh_image = cv2.threshold(gray, threshold_value, 255, cv2.THRESH_BINARY)
+            rangeCount = 90
+            for i in range(rangeCount):
+                if (i == 0):
+                    result = reader.readtext(plate_image, allowlist=allowedSymbols)
+                gamma_adjusted_image = cv2.LUT(plate_image, table)
+                gray = cv2.cvtColor(gamma_adjusted_image, cv2.COLOR_BGR2GRAY)
+                _, thresh_image = cv2.threshold(gray, threshold_value, 255, cv2.THRESH_BINARY)
+                if (i <= 45 and i > 0):
                     blur = cv2.GaussianBlur(thresh_image, (3, 3), 2, 2)
-                    result = reader.readtext(blur, allowlist='0123456789ABВCEHKMМOPTТXY')
-                else:
-                    result = reader.readtext(plate_image, allowlist='0123456789ABВCEHKMМOPTТXY')
+                    result = reader.readtext(blur, allowlist=allowedSymbols)
+                if (i > 45):
+                    result = reader.readtext(thresh_image, allowlist=allowedSymbols)
                 if result:
                     recognized_text = ' '.join([text[1] for text in result])
                     translatedUpperCased_text = translate_and_uppercase(recognized_text)
                     processed_text = process_string(translatedUpperCased_text.strip())
                     if (processed_text == plateNumber):
                         return jsonify({'status': True, 'message': 'Номер успешно распознан и соответсвует заявленному'}), 200
-                    print(f"Итерация {i}: Распознанный номер: {processed_text}")
-                
+                    if (i > 1 and firstRecognizedIteration == 0):
+                        firstRecognizedIteration = i
+                if (i == 45):
+                   threshold_value = firstRecognizedIteration * 6
+                   rangeCount = rangeCount - firstRecognizedIteration
+                if (rangeCount == i): break
                 threshold_value += 6
-
     return ({'status': False, 'message': "Номер на фото не распознан или не соответствует заявленному"}), 200
 
 
 def process_string(input_string):
+    num_prefix = ''
+    if len(input_string) > 0 and input_string[0].isdigit():
+        num_prefix += input_string[0]
+    if len(input_string) > 1 and input_string[1].isdigit():
+        num_prefix += input_string[1]
+    if len(input_string) > 2 and input_string[2].isdigit():
+        num_prefix += input_string[2]
+    if len(num_prefix) > 0 and len(input_string) > len(num_prefix) and input_string[len(num_prefix)] == ' ':
+        post_space = num_prefix
+        input_string = input_string[len(num_prefix) + 1:]
+    else:
+        post_space = ''
     if input_string and input_string[0] == '1':
         input_string = input_string[1:]
     if input_string and input_string[0] == '8':
         input_string = 'B' + input_string[1:]
     replacements = {
-        '4': 'A', '0': 'O', '1': 'K', '7': 'Y', '8': 'B', '9': 'M', '5': 'E'
+        '4': 'A', '0': 'O', '1': 'K',
+        '7': 'Y', '8': 'B', '9': 'M',
+        '5': 'E', '6': 'K'
     }
     if len(input_string) >= 7:
         for i in [0, 4, 5]:
@@ -107,26 +122,19 @@ def process_string(input_string):
                 input_string = input_string[:i] + '8' + input_string[i + 1:]
     if len(input_string) > 6 and ' ' not in input_string[:7]:
         input_string = input_string[:6] + ' ' + input_string[6:]
-    pre_space, post_space = input_string.split(' ', 1) if ' ' in input_string else (input_string, '')
-    if post_space:
-        if post_space[0] in ['B', 'В']:
-            post_space = post_space[1:]
-        if post_space and post_space[0] == 'E':
-            if len(post_space) < 3 or (len(post_space) >= 4 and post_space[3] != ' '):
-                post_space = '1' + post_space[1:]
-            else:
-                post_space = post_space[1:]
-        for char in post_space:
-            if char.isalpha() and not char.isdigit():
-                if len(post_space) < 3 or (len(post_space) >= 4 and post_space[3] != ' '):
-                    post_space = '1' + post_space[1:]
-                else:
-                    post_space = post_space.replace(char, '', 1)
-                break
-        if len(post_space) > 3:
-            post_space = post_space[:3]
-    return pre_space + (' ' + post_space if post_space else '')
-
+    pre_space = input_string.strip()
+    full_string = pre_space + (' ' + post_space if post_space else '')
+    full_list = list(full_string)
+    for i in range(6, len(full_string)):
+        if full_list[i] in ['K', 'К']:
+            full_list[i] = '6'
+        elif full_list[i] in ['E', 'Е']:
+            full_list[i] = '5'
+        elif full_list[i] in ['T', 'Т']:
+            full_list[i] = '7'
+        full_string = ''.join(full_list)
+    return full_string
+    
 
 def translate_and_uppercase(input_string):
     transliteration_dict = {
