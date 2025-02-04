@@ -37,9 +37,6 @@ def RecognizePlateNumber():
                     'bbox': (x1, y1, x2, y2),
                     'confidence': confidence
                 })
-
-    for obj in detected_objects:
-        print(f"Обнаружен объект: {obj['class']}, Координаты: {obj['bbox']}, Вероятность: {obj['confidence']:.2f}")
     if not any(obj['class'] == 'Car' for obj in detected_objects):
         return jsonify({'status': False, 'message': 'Машина не найдена на фото'}), 401
     if not any(obj['class'] == 'Plate' for obj in detected_objects):
@@ -50,10 +47,6 @@ def RecognizePlateNumber():
         cv2.rectangle(image, (x1, y1), (x2, y2), (0, 255, 0), 2)
         cv2.putText(image, f"{obj['class']} {obj['confidence']:.2f}", (x1, y1 - 10), 
                     cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
-    cv2.imshow('Detected Objects', image)
-    cv2.waitKey(0)
-    cv2.destroyAllWindows()
-
     for obj in detected_objects:
         if obj['class'] == 'Plate':
             x1, y1, x2, y2 = map(int, obj['bbox'])
@@ -81,7 +74,6 @@ def RecognizePlateNumber():
                     processed_text = process_string(translatedUpperCased_text.strip())
                     if (processed_text == plateNumber):
                         return jsonify({'status': True, 'message': 'Номер успешно распознан и соответсвует заявленному'}), 200
-                    print(f"Итерация {i}: Распознанный номер: {processed_text}")
                     if (i > 1 and firstRecognizedIteration == 0):
                         firstRecognizedIteration = i
                 if (i == 45):
@@ -142,7 +134,7 @@ def process_string(input_string):
             full_list[i] = '7'
         full_string = ''.join(full_list)
     return full_string
-
+    
 
 def translate_and_uppercase(input_string):
     transliteration_dict = {
