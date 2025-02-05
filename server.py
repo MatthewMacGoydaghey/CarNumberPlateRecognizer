@@ -77,7 +77,7 @@ def RecognizePlateNumber():
                         translatedUpperCased_text = translate_and_uppercase(recognized_text)
                         processed_text = process_string(translatedUpperCased_text.strip())
                         if (processed_text == plateNumber):
-                           return jsonify({'status': True, 'message': 'Номер успешно распознан и соответсвует заявленному'}), 200
+                           return jsonify({'status': True, 'message': 'Номер соответствует входной строке'}), 200
                         #for _, text in enumerate(result):
                         # confidence = text[2]
                         # print(f"Итерация: {i}, Текст: {processed_text}, {recognized_text} Confidence: {confidence:.2f}")
@@ -88,7 +88,7 @@ def RecognizePlateNumber():
                    rangeCount = rangeCount - firstRecognizedIteration
                 if (rangeCount == i): break
                 threshold_value += 6
-    return ({'status': False, 'message': "Номер на фото не распознан или не соответствует заявленному"}), 200
+    return ({'status': False, 'message': "Номер не соответствует входной строке или не распознан"}), 200
 
 
 def process_string(input_string):
