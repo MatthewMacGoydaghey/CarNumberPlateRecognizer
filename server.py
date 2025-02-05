@@ -5,6 +5,7 @@ import easyocr
 import numpy as np
 
 app = Flask(__name__)
+port_number = 5005
 CaPD_model = YOLO('CaPD_model.pt')
 reader = easyocr.Reader(['en', 'ru'])
 
@@ -12,18 +13,20 @@ reader = easyocr.Reader(['en', 'ru'])
 
 def RecognizePlateNumber():
     args = request.args
-    plateNumber = args.get('number')
+    plateNumber = args.get('plate_number')
     if (not plateNumber):
-        return jsonify({'status': False, 'message': 'Поле number необходимо'}), 401
+        return jsonify({'status': False, 'message': 'Поле plate_number необходимо'}), 401
     if len(plateNumber) > 6 and plateNumber[6] != ' ': plateNumber = plateNumber[:6] + ' ' + plateNumber[6:]
     plateNumber = translate_and_uppercase(plateNumber)
-    if 'photo' not in request.files:
-        return jsonify({'status': False, 'message': 'Поле photo необходимо'}), 401
-    photo = request.files['photo']
-    if photo.filename == '':
+    if 'car_photo' not in request.files:
+        return jsonify({'status': False, 'message': 'Поле car_photo необходимо'}), 401
+    car_photo = request.files['car_photo']
+    if car_photo.filename == '':
         return jsonify({'status': False, 'message': 'Фото авто отсутствует'}), 401
+    if car_photo.mimetype not in ['image/jpeg', 'image/png']:
+        return jsonify({'status': False, 'message': 'Файл должен быть в формате jpg или png'}), 401
     
-    image = cv2.imdecode(np.frombuffer(photo.read(), np.uint8), cv2.IMREAD_COLOR)
+    image = cv2.imdecode(np.frombuffer(car_photo.read(), np.uint8), cv2.IMREAD_COLOR)
     detected_objects = []
     results = CaPD_model(image)
     for result in results:
@@ -162,5 +165,4 @@ def translate_and_uppercase(input_string):
     return translated_string
 
 
-if __name__ == '__main__':
-    app.run(debug=True)
+app.run(debug=True, host='localhost', port=port_number)
