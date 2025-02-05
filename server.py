@@ -5,7 +5,7 @@ import easyocr
 import numpy as np
 
 app = Flask(__name__)
-CaPDmodel = YOLO('CaPD_model.pt')
+CaPD_model = YOLO('CaPD_model.pt')
 reader = easyocr.Reader(['en', 'ru'])
 
 @app.route('/verify_license_plate', methods=['GET'])
@@ -25,7 +25,7 @@ def RecognizePlateNumber():
     
     image = cv2.imdecode(np.frombuffer(photo.read(), np.uint8), cv2.IMREAD_COLOR)
     detected_objects = []
-    results = CaPDmodel(image)
+    results = CaPD_model(image)
     for result in results:
         for box in result.boxes:
             x1, y1, x2, y2 = box.xyxy[0]
@@ -68,12 +68,16 @@ def RecognizePlateNumber():
                     result = reader.readtext(blur, allowlist=allowedSymbols)
                 if (i > 45):
                     result = reader.readtext(thresh_image, allowlist=allowedSymbols)
-                if result:
+                if (result):
                     recognized_text = ' '.join([text[1] for text in result])
-                    translatedUpperCased_text = translate_and_uppercase(recognized_text)
-                    processed_text = process_string(translatedUpperCased_text.strip())
-                    if (processed_text == plateNumber):
-                        return jsonify({'status': True, 'message': 'Номер успешно распознан и соответсвует заявленному'}), 200
+                    if (len(recognized_text) > 7):
+                        translatedUpperCased_text = translate_and_uppercase(recognized_text)
+                        processed_text = process_string(translatedUpperCased_text.strip())
+                        if (processed_text == plateNumber):
+                           return jsonify({'status': True, 'message': 'Номер успешно распознан и соответсвует заявленному'}), 200
+                        #for _, text in enumerate(result):
+                        # confidence = text[2]
+                        # print(f"Итерация: {i}, Текст: {processed_text}, {recognized_text} Confidence: {confidence:.2f}")
                     if (i > 1 and firstRecognizedIteration == 0):
                         firstRecognizedIteration = i
                 if (i == 45):
@@ -101,12 +105,14 @@ def process_string(input_string):
         input_string = input_string[1:]
     if input_string and input_string[0] == '8':
         input_string = 'B' + input_string[1:]
+    if len(input_string) > 2 and input_string[0] == 'E' and any(c.isalpha() for c in input_string[1:]) and any(c.isdigit() for c in input_string[1:]):
+        input_string = input_string[1:]
     replacements = {
         '4': 'A', '0': 'O', '1': 'K',
         '7': 'Y', '8': 'B', '9': 'M',
         '5': 'E', '6': 'K'
     }
-    if len(input_string) >= 7:
+    if len(input_string) > 5:
         for i in [0, 4, 5]:
             if input_string[i] in replacements:
                 input_string = input_string[:i] + replacements[input_string[i]] + input_string[i + 1:]
@@ -132,7 +138,11 @@ def process_string(input_string):
             full_list[i] = '5'
         elif full_list[i] in ['T', 'Т']:
             full_list[i] = '7'
+        elif full_list[i] in ['P']:
+            full_list[i] = '2'
         full_string = ''.join(full_list)
+    if len(full_string) > 10:
+       full_string = full_string[:10]
     return full_string
     
 
