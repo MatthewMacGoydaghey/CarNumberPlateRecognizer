@@ -5,27 +5,30 @@ import easyocr
 import numpy as np
 
 app = Flask(__name__)
-CaPDmodel = YOLO('CaPD_model.pt')
+port_number = 5005
+CaPD_model = YOLO('CaPD_model.pt')
 reader = easyocr.Reader(['en', 'ru'])
 
 @app.route('/verify_license_plate', methods=['GET'])
 
 def RecognizePlateNumber():
     args = request.args
-    plateNumber = args.get('number')
+    plateNumber = args.get('plate_number')
     if (not plateNumber):
-        return jsonify({'status': False, 'message': 'Поле number необходимо'}), 401
+        return jsonify({'status': False, 'message': 'Поле plate_number необходимо'}), 401
     if len(plateNumber) > 6 and plateNumber[6] != ' ': plateNumber = plateNumber[:6] + ' ' + plateNumber[6:]
     plateNumber = translate_and_uppercase(plateNumber)
-    if 'photo' not in request.files:
-        return jsonify({'status': False, 'message': 'Поле photo необходимо'}), 401
-    photo = request.files['photo']
-    if photo.filename == '':
+    if 'car_photo' not in request.files:
+        return jsonify({'status': False, 'message': 'Поле car_photo необходимо'}), 401
+    car_photo = request.files['car_photo']
+    if car_photo.filename == '':
         return jsonify({'status': False, 'message': 'Фото авто отсутствует'}), 401
+    if car_photo.mimetype not in ['image/jpeg', 'image/png']:
+        return jsonify({'status': False, 'message': 'Файл должен быть в формате jpg или png'}), 401
     
-    image = cv2.imdecode(np.frombuffer(photo.read(), np.uint8), cv2.IMREAD_COLOR)
+    image = cv2.imdecode(np.frombuffer(car_photo.read(), np.uint8), cv2.IMREAD_COLOR)
     detected_objects = []
-    results = CaPDmodel(image)
+    results = CaPD_model(image)
     for result in results:
         for box in result.boxes:
             x1, y1, x2, y2 = box.xyxy[0]
@@ -68,12 +71,16 @@ def RecognizePlateNumber():
                     result = reader.readtext(blur, allowlist=allowedSymbols)
                 if (i > 45):
                     result = reader.readtext(thresh_image, allowlist=allowedSymbols)
-                if result:
+                if (result):
                     recognized_text = ' '.join([text[1] for text in result])
-                    translatedUpperCased_text = translate_and_uppercase(recognized_text)
-                    processed_text = process_string(translatedUpperCased_text.strip())
-                    if (processed_text == plateNumber):
-                        return jsonify({'status': True, 'message': 'Номер успешно распознан и соответсвует заявленному'}), 200
+                    if (len(recognized_text) > 7):
+                        translatedUpperCased_text = translate_and_uppercase(recognized_text)
+                        processed_text = process_string(translatedUpperCased_text.strip())
+                        if (processed_text == plateNumber):
+                           return jsonify({'status': True, 'message': 'Номер соответствует входной строке'}), 200
+                        #for _, text in enumerate(result):
+                        # confidence = text[2]
+                        # print(f"Итерация: {i}, Текст: {processed_text}, {recognized_text} Confidence: {confidence:.2f}")
                     if (i > 1 and firstRecognizedIteration == 0):
                         firstRecognizedIteration = i
                 if (i == 45):
@@ -81,7 +88,7 @@ def RecognizePlateNumber():
                    rangeCount = rangeCount - firstRecognizedIteration
                 if (rangeCount == i): break
                 threshold_value += 6
-    return ({'status': False, 'message': "Номер на фото не распознан или не соответствует заявленному"}), 200
+    return ({'status': False, 'message': "Номер не соответствует входной строке или не распознан"}), 200
 
 
 def process_string(input_string):
@@ -101,12 +108,14 @@ def process_string(input_string):
         input_string = input_string[1:]
     if input_string and input_string[0] == '8':
         input_string = 'B' + input_string[1:]
+    if len(input_string) > 2 and input_string[0] == 'E' and any(c.isalpha() for c in input_string[1:]) and any(c.isdigit() for c in input_string[1:]):
+        input_string = input_string[1:]
     replacements = {
         '4': 'A', '0': 'O', '1': 'K',
         '7': 'Y', '8': 'B', '9': 'M',
         '5': 'E', '6': 'K'
     }
-    if len(input_string) >= 7:
+    if len(input_string) > 5:
         for i in [0, 4, 5]:
             if input_string[i] in replacements:
                 input_string = input_string[:i] + replacements[input_string[i]] + input_string[i + 1:]
@@ -132,7 +141,11 @@ def process_string(input_string):
             full_list[i] = '5'
         elif full_list[i] in ['T', 'Т']:
             full_list[i] = '7'
+        elif full_list[i] in ['P']:
+            full_list[i] = '2'
         full_string = ''.join(full_list)
+    if len(full_string) > 10:
+       full_string = full_string[:10]
     return full_string
     
 
@@ -152,5 +165,4 @@ def translate_and_uppercase(input_string):
     return translated_string
 
 
-if __name__ == '__main__':
-    app.run(debug=True)
+app.run(debug=True, host='localhost', port=port_number)
