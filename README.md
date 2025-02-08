@@ -7,6 +7,7 @@
 
 Запрос:
 localhost:5005/verify_license_plate?plate_number=M960EH197
+
 car_photo: car.jpg
 
 
