@@ -1,4 +1,3 @@
-<<<<<<< README.md
 Установка python: sudo apt install python-pip -y;
 
 Установка зависимсотей: pip install -r requirements.txt
