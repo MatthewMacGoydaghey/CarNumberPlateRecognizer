@@ -19,5 +19,5 @@ car_photo: car.jpg
 
 
 "status": false,
-"message": *Описание оишбки*
+"message": *Описание оишбки*,
 "reason": *Причина ошибки в snake_case формате*
