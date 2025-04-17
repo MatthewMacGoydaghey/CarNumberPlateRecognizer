@@ -19,4 +19,5 @@ car_photo: car.jpg
 
 
 "status": false,
-"message": 'Номер не соответствует входной строке или не распознан'
+"message": *Описание оишбки*
+"reason": *Причина ошибки в snake_case формате*
